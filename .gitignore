@@ -1,0 +1,14 @@
+# build output of scaffolded projects (they carry their own copies of the scripts)
+out/
+*.apk
+app.env.bak
+
+# python caches
+__pycache__/
+*.pyc
+
+# local smoke-test leftovers
+.dev-apk-selfcheck*/
+dev-apk-selfcheck/
+
+# NOTE: vendor/ is intentionally NOT ignored - the offline toolchain ships with the skill
