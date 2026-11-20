@@ -54,9 +54,10 @@ Four things cost hours and are baked in:
 2. **Flag values move between Android versions** (`TRUSTED` is `0x40` on 10-13, `0x400` on 16),
    so they are read from the framework by name at runtime. The set that works here:
    `PUBLIC|TRUSTED|OWN_CONTENT_ONLY|SUPPORTS_TOUCH|OWN_FOCUS|STEAL_TOP_FOCUS_DISABLED|
-   SHOULD_SHOW_SYSTEM_DECORATIONS|ALWAYS_UNLOCKED|OWN_DISPLAY_GROUP|ROTATES_WITH_CONTENT`
-   (`0x15ec9` on this build). `OWN_FOCUS` + `STEAL_TOP_FOCUS_DISABLED` are what keep your own
-   foreground untouched.
+   SHOULD_SHOW_SYSTEM_DECORATIONS|ALWAYS_UNLOCKED|OWN_DISPLAY_GROUP|ROTATES_WITH_CONTENT|
+   DESTROY_CONTENT_ON_REMOVAL` (`0x15fc9` on this build). `OWN_FOCUS` + `STEAL_TOP_FOCUS_DISABLED`
+   are what keep your own foreground untouched; `DESTROY_CONTENT_ON_REMOVAL` is what stops the
+   app from being thrown onto the user's panel when the display is released.
 3. **A display in its own display group starts OFF** and an OFF display renders nothing
    (`ERR no frame`). The daemon therefore sets a power override at startup:
    `DisplayManager.setOverrideDisplayState(id, 2)`. `setVirtualDisplayState()` does **not**
@@ -154,6 +155,12 @@ su -c "dumpsys display" | grep -c "Display Id=131"   # 0
 su -c "pgrep -f dev.apkdbg.Vd"                        # empty
 ```
 
+**The app dies with the display.** Without `DESTROY_CONTENT_ON_REMOVAL` the system *moves* the
+tasks off a display that disappears, so releasing the display throws the app onto the user's
+panel - measured: after `destroy`, display 0 went from `com.termux` to
+`com.android.settings/.Settings` and the Bluetooth page popped up in front of the user. With
+the flag set (it is), display 0 keeps its focus and nothing appears.
+
 If the phone reboots, everything is gone by design - nothing is persisted, `/data/local/tmp`
 is wiped on boot on most devices.
 
@@ -167,6 +174,7 @@ is wiped on boot on most devices.
 | tap does nothing | outside `touchableRegion`, or the shot rotation is wrong | `dumpsys input` for the region; `vd.sh rotate` |
 | `NO FRAME` after the first shot | command seq not monotonic | use `vd.sh`, which stamps `date +%s%N` |
 | app opened on the panel | `am start` without `--display` | `vd.sh launch` (it passes `--display`) |
+| the app pops onto the panel when you run `destroy` | the system moved it there when its display vanished | keep `DESTROY_CONTENT_ON_REMOVAL` in the flag set (it is on by default) |
 | nothing renders with the screen off | power override missing | `vd.sh log`, look for `OK power 2 via …` |
 
 ## Not covered

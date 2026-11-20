@@ -102,6 +102,8 @@ else
   check "vd.sh destroy"       sh -c "cd '$WORK/app' && ./vd.sh destroy"
   check "display released"    sh -c "cd '$WORK/app' && [ -z \"\$(./vd.sh id)\" ]"
   check "no daemon left"      no_daemon
+  # Releasing the display must not dump the app onto the user's panel (DESTROY_CONTENT_ON_REMOVAL).
+  check "app not on the panel" sh -c "cd '$WORK/app' && ./probe.sh '$PKG' | grep -q 'FOREGROUND: no'"
 fi
 
 step "result"

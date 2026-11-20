@@ -45,7 +45,7 @@ public class Vd {
      */
     static int F_PUBLIC, F_TRUSTED, F_OWN_CONTENT_ONLY, F_SUPPORTS_TOUCH, F_OWN_FOCUS,
                F_STEAL_TOP_FOCUS_DISABLED, F_SHOW_DECORATIONS, F_ALWAYS_UNLOCKED,
-               F_OWN_DISPLAY_GROUP, F_ROTATES_WITH_CONTENT;
+               F_OWN_DISPLAY_GROUP, F_ROTATES_WITH_CONTENT, F_DESTROY_ON_REMOVAL;
 
     static final Object LOCK = new Object();
     static volatile Image last;
@@ -94,7 +94,10 @@ public class Vd {
 
         int flags = F_PUBLIC | F_TRUSTED | F_OWN_CONTENT_ONLY | F_SUPPORTS_TOUCH
                 | F_OWN_FOCUS | F_STEAL_TOP_FOCUS_DISABLED | F_SHOW_DECORATIONS
-                | F_ALWAYS_UNLOCKED | F_OWN_DISPLAY_GROUP | F_ROTATES_WITH_CONTENT;
+                | F_ALWAYS_UNLOCKED | F_OWN_DISPLAY_GROUP | F_ROTATES_WITH_CONTENT
+                // Without this the system *moves* the app onto the user's panel when the
+                // display is released - the app pops up in front of them at teardown.
+                | F_DESTROY_ON_REMOVAL;
         vd = dm.createVirtualDisplay("apkdbg", w, h, dpi, reader.getSurface(), flags);
         if (vd == null) { log("ERROR createVirtualDisplay returned null"); System.exit(2); }
         displayId = vd.getDisplay().getDisplayId();
@@ -143,6 +146,7 @@ public class Vd {
         F_ALWAYS_UNLOCKED = flag("VIRTUAL_DISPLAY_FLAG_ALWAYS_UNLOCKED", 0x1000);
         F_OWN_DISPLAY_GROUP = flag("VIRTUAL_DISPLAY_FLAG_OWN_DISPLAY_GROUP", 0x800);
         F_ROTATES_WITH_CONTENT = flag("VIRTUAL_DISPLAY_FLAG_ROTATES_WITH_CONTENT", 0x80);
+        F_DESTROY_ON_REMOVAL = flag("VIRTUAL_DISPLAY_FLAG_DESTROY_CONTENT_ON_REMOVAL", 0x100);
     }
 
     static int flag(String name, int fallback) {

@@ -54,7 +54,7 @@ references/build.md       toolchain: aapt2 / javac / d8 / sign, and the Termux J
 references/install.md     staging, silent install, verifiers, launching, multiprofile
 references/testing.md     hooks, the app's own log file, liveness, tap calibration
 references/virtual-display.md  the invisible display: daemon, flags, rotation, input, screen-off
-references/pitfalls.md    32 symptoms -> cause -> fix
+references/pitfalls.md    33 symptoms -> cause -> fix
 references/vendor.md      the offline toolchain, adding an API level, new dexer
 scripts/                  setup, new-project, build, install, test, probe, log, screen,
                           silent-install, wrap-termux-jdk, fix-termux-javac, dumpjni,

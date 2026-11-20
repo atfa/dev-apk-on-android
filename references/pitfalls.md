@@ -198,3 +198,11 @@ closes the image, and write to `.tmp` then rename; the driver polls for the file
 That API does not exist on Android 16 (on `DisplayManager` or `DisplayManagerGlobal`). Fix: probe
 `setOverrideDisplayState` → `setForceDisplayStateOn` → `DisplayManagerGlobal.requestDisplayPower`,
 in that order.
+
+### 33. The app pops up on the user's screen when you release the display
+
+A display that disappears does not take its apps with it: the system **moves** the tasks to the
+default display, so `vd.sh destroy` throws the app in front of the user (measured: display 0 went
+from `com.termux` to `com.android.settings/.Settings`, and the Bluetooth page appeared). Fix:
+create the display with `VIRTUAL_DISPLAY_FLAG_DESTROY_CONTENT_ON_REMOVAL`, which finishes the
+apps instead of relocating them - `vd.sh` sets it.

@@ -31,6 +31,11 @@ had open.
 
 ## Fixed
 
+* The app popped up on the user's screen when the display was released: a display that disappears
+  does not take its apps with it, the system *moves* them to the default display (measured:
+  display 0 went from `com.termux` to `com.android.settings/.Settings`). The display is now
+  created with `DESTROY_CONTENT_ON_REMOVAL`, so the app dies with the display. Selfcheck asserts
+  the app is not in the foreground after `destroy`.
 * `vd.sh status` printed nothing under "your screen is showing": the awk pattern required a
   trailing space after `mDisplayId=0`, and that line usually ends right there. Selfcheck now
   asserts that line is non-empty, so the regression cannot come back.
