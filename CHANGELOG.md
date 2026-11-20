@@ -29,6 +29,12 @@ had open.
 * Verified on Android 16 (vivo V2366HA, KernelSU): create -> launch -> shot -> tap -> screen-off
   rendering -> destroy, with the plant game and a scaffolded test app.
 
+## Fixed
+
+* `vd.sh status` printed nothing under "your screen is showing": the awk pattern required a
+  trailing space after `mDisplayId=0`, and that line usually ends right there. Selfcheck now
+  asserts that line is non-empty, so the regression cannot come back.
+
 # 0.1.0
 
 First public version, extracted from private experiments building games and utilities on a

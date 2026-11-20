@@ -122,8 +122,11 @@ status() {
   asroot "dumpsys window displays" 2>/dev/null \
     | awk -v d="mDisplayId=$id" 'index($0,d){f=1} f&&/mCurrentFocus/{print "  "$0; exit}'
   say "your screen is showing:"
-  asroot "dumpsys window displays" 2>/dev/null \
-    | awk '/mDisplayId=0 /{f=1} f&&/mCurrentFocus/{print "  "$0; exit}'
+  # `mDisplayId=0` is often at the end of the line, so do not require a trailing space -
+  # and do not match mDisplayId=0x... style ids either.
+  out=$(asroot "dumpsys window displays" 2>/dev/null \
+    | awk '/mDisplayId=0([^0-9]|$)/{f=1} f&&/mCurrentFocus/{print "  "$0; exit}')
+  [ -n "$out" ] && printf '%s\n' "$out" || say "  (nothing focused on display 0)"
 }
 
 log() { need_root; asroot "cat $LOG" 2>/dev/null | tail -n "${1:-20}"; }

@@ -93,6 +93,7 @@ else
   check "vd.sh create"        sh -c "cd '$WORK/app' && ./vd.sh create"
   check "vd.sh id"            sh -c "cd '$WORK/app' && ./vd.sh id | grep -qE '^[0-9]+$'"
   check "install.sh --bg"     sh -c "cd '$WORK/app' && ./install.sh --bg"
+  check "vd.sh status"          sh -c "cd '$WORK/app' && ./vd.sh status | grep -A1 'your screen is showing' | grep -q mCurrentFocus"
   check "vd.sh size"          sh -c "cd '$WORK/app' && ./vd.sh size | grep -q 'screenshot: [0-9]*x[0-9]*'"
   check "vd.sh shot"          sh -c "cd '$WORK/app' && ./vd.sh shot '$WORK/vd.png' && test -s '$WORK/vd.png'"
   check "screen.sh --vd"      sh -c "cd '$WORK/app' && ./screen.sh --vd 40 | grep -q ."
