@@ -33,9 +33,15 @@ cp "$SKILL/templates/ascii.py" "$DIR/ascii.py"
 
 # Everything the project needs to rebuild, install and test itself, offline.
 for f in build.sh install.sh probe.sh log.sh screen.sh silent-install.sh \
-         wrap-termux-jdk.sh fix-termux-javac.py dumpjni.py; do
+         wrap-termux-jdk.sh fix-termux-javac.py dumpjni.py vd.sh vd-build.sh; do
   cp "$SKILL/scripts/$f" "$DIR/$f"
 done
+# The background-display daemon ships prebuilt (7 KB) so a project can run headless without
+# rebuilding it; the source comes along so it stays rebuildable.
+if [ -f "$SKILL/vendor/vd/vd.jar" ]; then
+  mkdir -p "$DIR/vendor/vd"
+  cp "$SKILL/vendor/vd/vd.jar" "$SKILL/vendor/vd/Vd.java" "$DIR/vendor/vd/"
+fi
 cp "$SKILL"/lib/*.sh "$DIR/lib/"
 chmod 755 "$DIR"/*.sh "$DIR"/gen_icon.py
 
@@ -63,6 +69,8 @@ Scripts are bash/sh - call them as \`./build.sh\`, never \`sh build.sh\` (build.
 * config: \`app.env\` (package, activity, api levels, apk name)
 * test hook: \`am start -n $PKG/.MainActivity --es hook ping\` or a \`files/testhook\` file
 * logs: \`./log.sh $TAG\`   foreground/crash: \`./probe.sh $PKG\`   screen as text: \`./screen.sh 60\`
+* headless (root): \`./install.sh --bg\` runs it on an invisible display, \`./screen.sh --vd\` sees it,
+  \`./vd.sh tap X Y\` drives it, \`./test.sh --vd\` tests it while the phone stays yours
 * toolchain (jars, keystore) is shared and lives outside the project: setup-toolchain.sh
 EOF
 

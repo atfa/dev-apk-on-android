@@ -28,3 +28,11 @@ fi
 say "--- crashes ---"
 CRASH=$(asroot "logcat -d -b crash 2>/dev/null | grep -A14 '$PKG' | tail -16" 2>/dev/null || true)
 [ -n "$CRASH" ] && printf '%s\n' "$CRASH" || say "(none)"
+
+# "Foreground" is per display: an app on a background virtual display is foreground on its own
+# display while the panel shows something else (see vd.sh / references/virtual-display.md).
+say "--- per-display focus ---"
+asroot "dumpsys window displays" 2>/dev/null | awk -v pkg="$PKG" '
+  /mDisplayId=/ { d=$0; sub(/.*mDisplayId=/, "", d); sub(/[^0-9].*/, "", d) }
+  /mCurrentFocus=/ { f=$0; sub(/.*mCurrentFocus=/, "", f)
+                      printf "  display %s: %s%s\n", d, f, (index(f, pkg) ? "   <-- target" : "") }' | head -8

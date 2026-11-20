@@ -1,6 +1,6 @@
 ---
 name: dev-apk-on-android
-description: Build, sign, install and drive Android APKs entirely on the Android phone from Termux - no PC, no Android Studio, no Gradle. Use when asked to write an Android app, compile Java/Kotlin into an .apk, sign it, install or launch it on this device, drive it from a shell script, or when an on-device build fails (aapt2, d8/R8, javac aborting, pm install hanging, zipalign).
+description: Build, sign, install and drive Android APKs entirely on the Android phone from Termux - no PC, no Android Studio, no Gradle. Use when asked to write an Android app, compile Java/Kotlin into an .apk, sign it, install or launch it on this device, drive it from a shell script, run it on an invisible background display so the phone stays usable while debugging, or when an on-device build fails (aapt2, d8/R8, javac aborting, pm install hanging, zipalign).
 license: MIT
 compatibility: Android 7+ (minSdk 24), Termux arm64/armv7 with aapt2 + apksigner + openjdk-21; root (Magisk/KernelSU/sudo) optional - it upgrades install/verify from manual to automatic
 metadata:
@@ -52,6 +52,28 @@ Drive the app through hooks instead of taps: `am start ... --es hook ping` for c
 a `files/testhook` file for a warm app (Android 14+ drops the extras when the activity is
 already on top). Details and the fail-modes of this harness: `references/testing.md`.
 
+## Debug it on a display nobody can see (root)
+
+`am start` normally steals the panel, so a long test makes the phone unusable. With root, put
+the app on a **virtual display** that nothing mirrors - the app runs, renders, takes touches and
+can be screenshotted while you keep using the phone (screen off, even):
+
+```sh
+sh $S/vd.sh create                        # background display: 131 (1080x2400@440)
+sh $S/vd.sh launch com.example.myapp/.MainActivity
+sh $S/vd.sh shot /tmp/app.png             # upright PNG, panel untouched
+sh $S/vd.sh tap 540 1200                  # screenshot pixels
+./install.sh --bg ; ./screen.sh --vd 60 ; ./test.sh --vd    # same thing, wired in
+sh $S/vd.sh destroy
+```
+
+A small `app_process` daemon (`vendor/vd/Vd.java`, prebuilt to `vendor/vd/vd.jar`) owns the
+display; `scripts/vd.sh` drives it over a command file. Rotation is detected from the app
+window transform and undone, so shots are upright and taps use shot coordinates. Without root
+`vd.sh` exits 3 with a message; `settings put global overlay_display_devices "1080x2400/440"`
+is the no-daemon fallback (it leaves a thumbnail on the panel). Flags, rotation mapping, the
+screen-off behaviour and the troubleshooting table: `references/virtual-display.md`.
+
 ## Rules that break on-device builds
 
 1. **Never use Termux's `d8`** for JDK-compiled classes: it is R8 3.3 and dies with
@@ -85,6 +107,7 @@ launch traps, `references/vendor.md` the bundled binaries.
 | build, sign | yes | yes |
 | install | `pm install -r -g` + `am start`, unattended | `termux-open`, one tap |
 | probe / logcat / screencap | yes | not available |
+| background virtual display (`vd.sh`) | yes | not available (settings overlay is) |
 | automated acceptance test | yes | builds, installs, then stops |
 
 Every script degrades with a message instead of failing: `test.sh` exits 3 ("skipped") when
@@ -100,7 +123,8 @@ src/<pkg path>/       Java sources
 res/                  resources (launcher icons: $PY gen_icon.py A)
 assets/               packaged as-is
 lib/                  config.sh + root.sh shared by the copied scripts
-build.sh install.sh test.sh probe.sh log.sh screen.sh
+vendor/vd/vd.jar      background-display daemon (prebuilt, 7 KB) + Vd.java
+build.sh install.sh test.sh probe.sh log.sh screen.sh vd.sh
 ```
 
 `app.env` is the single source of truth for api levels; an environment variable wins over it,

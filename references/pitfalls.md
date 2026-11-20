@@ -145,3 +145,56 @@ handle BACK in the Activity (`onKeyDown`/`onBackPressed`).
 
 `run-as` is unusable on userdebug/factory ROMs. Fix: read app files as root in the global
 namespace (`su --mount-master`), or have the app expose what you need through a hook.
+
+## Virtual display
+
+### 25. `ERR no frame (is the display showing anything?)`
+
+A virtual display created with `OWN_DISPLAY_GROUP` starts in a display group whose power state
+is OFF, and an OFF display renders nothing - `createVirtualDisplay` succeeds, the app launches,
+and every capture is empty. Fix: set a power override after creating it
+(`DisplayManager.setOverrideDisplayState(id, 2)`), which is what `vd.sh` does at startup. It is
+also what keeps the app rendering while the panel is off.
+
+### 26. The display is created but is not trusted / does not take focus the way you asked
+
+Flag values move between Android versions - `VIRTUAL_DISPLAY_FLAG_TRUSTED` is `0x40` on 10-13
+and `0x400` on 16, and several names appear or disappear between releases. Hard-coded numbers
+silently mean a different flag. Fix: read them from the framework by name at runtime
+(`DisplayManager.class.getField(name)`), as `vendor/vd/Vd.java` does.
+
+### 27. The `app_process` daemon hangs forever at startup
+
+`ActivityThread.systemMain().getSystemContext()` never returns in a process with no Looper - the
+process just sits there until it is killed (exit 137). Fix: `Looper.prepareMainLooper()` first.
+
+### 28. Shots of a landscape app come out sideways and taps are transposed
+
+SurfaceFlinger renders into the display's **base** (natural) size, so a landscape app is drawn
+rotated inside a portrait buffer, and `Display.getRotation()` reports 0 for it. Fix: read the
+app window's transform from `dumpsys input` (`transform (ROT_270)`) and rotate the shot the
+other way; `vd.sh launch` does it and maps tap coordinates through it.
+
+### 29. `Unknown command: touchscreen`
+
+`input -d 131 touchscreen tap x y` is the wrong order - the input source goes **before** `-d`:
+`input touchscreen -d 131 tap x y`.
+
+### 30. The tap is accepted and nothing happens
+
+It landed outside the window's `touchableRegion` (measured: `touchableRegion=[0,0][1080,1080]`
+on a 1080x2400 display), and input to a rotated window has rotated bounds. Fix: check
+`su -c "dumpsys input"` under `Display: <id>`, and give `vd.sh` screenshot coordinates, which it
+maps for you.
+
+### 31. `IllegalStateException: buffer is inaccessible`, or a PNG that will not decode
+
+The `ImageReader` buffer is closed by the time you read it, and a screenshot written straight to
+its final name is read while still being written. Fix: copy the pixels under the same lock that
+closes the image, and write to `.tmp` then rename; the driver polls for the file.
+
+### 32. `NoSuchMethodException: setVirtualDisplayState`
+
+That API does not exist on Android 16 (on `DisplayManager` or `DisplayManagerGlobal`). Fix: probe
+`setOverrideDisplayState` → `setForceDisplayStateOn` → `DisplayManagerGlobal.requestDisplayPower`,
+in that order.

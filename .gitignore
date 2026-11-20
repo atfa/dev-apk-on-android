@@ -11,4 +11,8 @@ __pycache__/
 .dev-apk-selfcheck*/
 dev-apk-selfcheck/
 
-# NOTE: vendor/ is intentionally NOT ignored - the offline toolchain ships with the skill
+# NOTE: vendor/ is intentionally NOT ignored - the offline toolchain ships with the skill.
+# A global ~/.gitignore_global with `vendor/` (common on Go setups) would otherwise hide the
+# jars and the virtual-display daemon, so re-include the whole tree here.
+!vendor/
+!vendor/**
