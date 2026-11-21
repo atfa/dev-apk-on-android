@@ -52,9 +52,61 @@ fi
 "${DEXER[@]}" --release --lib "$ANDROID_JAR" --min-api "$MIN_API" --output "$OUT/dex" \
   $(find "$OUT/classes" -name '*.class')
 
+# --- Go native layer (optional) -----------------------------------------------------
+# If go/ holds a cgo module, it is built with -buildmode=c-shared into
+# lib/<abi>/lib$GO_LIB.so inside the apk; Java loads it with System.loadLibrary("$GO_LIB").
+# Termux's go is preconfigured for GOOS=android GOARCH=arm64 CGO_ENABLED=1, so no NDK and no
+# cross-toolchain is needed for this phone's own ABI. See references/go-native.md.
+GO_DIR=${GO_DIR:-go}
+if [ "${GO_LIB+set}" != set ]; then GO_LIB=app; fi   # set-but-empty GO_LIB = no JNI library
+GO_BIN=${GO_BIN:-bin}
+GO_BIN_DIR=${GO_BIN_DIR:-bin}
+GO_LDFLAGS=${GO_LDFLAGS:--s -w}
+GO_FLAGS=${GO_FLAGS:-}
+GO_BIN_FLAGS=${GO_BIN_FLAGS:-}
+ABI=
+if [ -f "$GO_DIR/go.mod" ]; then
+  need go golang
+  GO_ARCH=${GOARCH:-$(go env GOARCH 2>/dev/null || echo arm64)}
+  case "$GO_ARCH" in
+    arm64) ABI=arm64-v8a ;; arm) ABI=armeabi-v7a ;; 386) ABI=x86 ;; amd64) ABI=x86_64 ;;
+    *) die "unsupported GOARCH: $GO_ARCH" ;;
+  esac
+  grep -q 'extractNativeLibs="true"' AndroidManifest.xml \
+    || warn "manifest lacks android:extractNativeLibs=\"true\": there is no zipalign on device, so the .so may fail to load"
+  mkdir -p "$OUT/native"
+  PROJ=$PWD
+  if [ "${GO_TEST:-0}" = 1 ]; then
+    echo "==> go test"
+    ( cd "$GO_DIR" && go test ./... )
+  fi
+  if [ -n "$GO_LIB" ]; then
+    echo "==> go build -buildmode=c-shared (GOOS=android GOARCH=$GO_ARCH -> lib/$ABI/lib$GO_LIB.so)"
+  ( cd "$GO_DIR" && env GOOS=android GOARCH="$GO_ARCH" CGO_ENABLED=1 \
+      go build -buildmode=c-shared -trimpath -ldflags="$GO_LDFLAGS" $GO_FLAGS \
+      -o "$PROJ/$OUT/native/lib$GO_LIB.so" . ) || die "go build failed"
+  [ -f "$OUT/native/lib$GO_LIB.so" ] || die "go build produced no lib$GO_LIB.so"
+  fi
+  # Optional: go/bin/ is a pure-Go (cgo-free) static binary, shipped as lib<name>.so so that
+  # pm install extracts it into nativeLibraryDir, where Java can Runtime.exec() it.
+  # GO_BIN_FLAGS carries extra build args, e.g. '-tags server' for a Wails v3 server build.
+  if [ -d "$GO_DIR/$GO_BIN_DIR" ]; then
+    echo "==> go build (pure Go binary -> lib/$ABI/lib$GO_BIN.so, exec'able)"
+    ( cd "$GO_DIR" && env GOOS=android GOARCH="$GO_ARCH" CGO_ENABLED=0 \
+        go build -trimpath -ldflags="$GO_LDFLAGS" $GO_BIN_FLAGS \
+        -o "$PROJ/$OUT/native/lib$GO_BIN.so" ./$GO_BIN_DIR ) \
+      || die "go build ./$GO_BIN_DIR failed"
+  fi
+fi
+
 echo "==> package"
 cp "$OUT/apk/base.apk" "$OUT/apk/unaligned.apk"
 (cd "$OUT/dex" && zip -q -X -j "$OLDPWD/$OUT/apk/unaligned.apk" classes.dex)
+if [ -d "$OUT/native" ] && ls "$OUT/native"/*.so >/dev/null 2>&1; then
+  mkdir -p "$OUT/apk/lib/$ABI"
+  cp "$OUT/native"/*.so "$OUT/apk/lib/$ABI/"
+  (cd "$OUT/apk" && zip -q -X -r "$OLDPWD/$OUT/apk/unaligned.apk" "lib/$ABI")
+fi
 if [ -d assets ] && [ -n "$(ls -A assets 2>/dev/null)" ]; then
   (cd assets && zip -q -X -r "$OLDPWD/$OUT/apk/unaligned.apk" .)
 fi

@@ -1,3 +1,39 @@
+# 0.3.0
+
+## Go as the business layer (cgo + JNI, built on the phone)
+
+Business code can now be written in **Go**: `go build -buildmode=c-shared` produces
+`lib<name>.so`, `build.sh` zips it into `lib/arm64-v8a/`, Java loads it with
+`System.loadLibrary` and calls it through `native` methods. No NDK, no Android SDK, no
+gomobile, no PC - Termux's go is preconfigured for `GOOS=android GOARCH=arm64 CGO_ENABLED=1`
+and `ndk-sysroot` supplies `jni.h`.
+
+* `scripts/new-go-project.sh` - scaffolds a Go project: `go/main.go` (business logic + JNI
+  bridge with C helpers, panic guards, async callbacks), `go/web.go` (net/http server + HTML
+  page for a WebView UI), `go/bin/` (pure-Go binary shipped as a `.so` and exec'd by Java),
+  a thin `MainActivity.java`, `go test` wiring, and the manifest switches
+  (`extractNativeLibs`, `usesCleartextTraffic`, `INTERNET`).
+* `scripts/build.sh` - builds `go/` when `go/go.mod` exists (`GO_DIR`, `GO_LIB`, `GO_BIN`,
+  `GO_BIN_DIR`, `GO_BIN_FLAGS`, `GO_LDFLAGS`, `GO_FLAGS`, `GO_TEST=1`), maps `GOARCH` to an ABI
+  directory, warns when the manifest lacks `extractNativeLibs="true"`. `GO_LIB=` (set but
+  empty) skips the JNI library and builds only the executable. Projects without a `go/` dir
+  build exactly as before.
+* `references/go-native.md` - the rules measured on device: JNI naming, cgo cannot call
+  `JNIEnv`'s function table, a Go panic reaching the JVM SIGABRTs the app, global refs +
+  `AttachCurrentThread` for goroutines that outlive a call, ~0.3 µs per JNI crossing, arm64
+  only, gomobile unusable on device, plus size/startup/memory/throughput measurements
+  (Go: 832 KB apk, +18 MB PSS, fib(28) 1.4 ms vs Java 131 ms).
+* Verified end to end on device: scaffold → `GO_TEST=1 build.sh` → install → `test.sh` PASS,
+  with hooks for concurrency (8 Java threads), async Go→Java callback, WebView UI over the Go
+  HTTP server, and `Runtime.exec` of a pure-Go binary.
+* **Wails v3 works on the phone** in server mode: `go install .../cmd/wails3` builds the CLI on
+  device, `wails3 generate bindings` generates the JS bindings on device, and
+  `go build -tags server` (`GO_BIN_FLAGS`) yields a 11.7 MB binary that serves the frontend and
+  its bound Go services on 127.0.0.1. Java exec's it from `nativeLibraryDir`, reads the
+  `SERVER URL:` it prints, and shows it in a WebView - verified: JS → `App.Fib(28)` → 2 ms →
+  `window.Android` → Java, 17 ms from exec to listening. `mygo` needs go >= 1.27 and a desktop
+  GUI backend, so it cannot run here.
+
 # 0.2.0
 
 ## Background virtual display: debug without stealing the phone

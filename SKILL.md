@@ -1,6 +1,6 @@
 ---
 name: dev-apk-on-android
-description: Build, sign, install and drive Android APKs entirely on the Android phone from Termux - no PC, no Android Studio, no Gradle. Use when asked to write an Android app, compile Java/Kotlin into an .apk, sign it, install or launch it on this device, drive it from a shell script, run it on an invisible background display so the phone stays usable while debugging, or when an on-device build fails (aapt2, d8/R8, javac aborting, pm install hanging, zipalign).
+description: Build, sign, install and drive Android APKs entirely on the Android phone from Termux - no PC, no Android Studio, no Gradle. Use when asked to write an Android app, compile Java or Go business code into an .apk, sign it, install or launch it on this device, drive it from a shell script, run it on an invisible background display so the phone stays usable while debugging, or when an on-device build fails (aapt2, d8/R8, javac aborting, pm install hanging, zipalign, cgo -buildmode=c-shared, JNI exports).
 license: MIT
 compatibility: Android 7+ (minSdk 24), Termux arm64/armv7 with aapt2 + apksigner + openjdk-21; root (Magisk/KernelSU/sudo) optional - it upgrades install/verify from manual to automatic
 metadata:
@@ -17,7 +17,8 @@ device. The on-device toolchain is `aapt2`/`apksigner` from Termux plus one Java
 resources  aapt2 compile / aapt2 link        Termux package, native aarch64
 sources    javac -source 8 -target 8         openjdk-21 + -bootclasspath android.jar
 classes    d8                                vendor/r8-*.jar (NOT Termux `d8`)
-package    zip classes.dex into the linked apk
+business   go build -buildmode=c-shared      optional Go layer, cgo, no NDK (references/go-native.md)
+package    zip classes.dex (+ lib/<abi>/*.so) into the linked apk
 sign       apksigner v1+v2+v3                ~/.android/debug.keystore
 install    pm install -r -g (root)  |  termux-open (one tap, no root)
 verify     dumpsys / logcat / the app's own files/testlog.txt
@@ -32,9 +33,34 @@ sh $S/new-project.sh $HOME/apps/myapp com.example.myapp "My App"
 cd $HOME/apps/myapp && ./build.sh && ./install.sh && ./test.sh
 ```
 
+Business logic in **Go** instead of Java (cgo + JNI, the `.so` is built on the phone, no NDK,
+no gomobile) - rules, gotchas and measurements: `references/go-native.md`:
+
+```sh
+sh $S/new-go-project.sh $HOME/apps/goapp com.example.goapp "Go App" goapp
+cd $HOME/apps/goapp && GO_TEST=1 ./build.sh && ./install.sh && ./test.sh
+```
+
 `new-project.sh` copies everything a project needs (scripts + lib/ + templates), so the
 project keeps working even if this skill is moved or deleted. Its `README.md` lists the
 files. `./build.sh` is bash - never call it as `sh build.sh`.
+
+## Go or Java? The user's word decides
+
+Say it in the request - "用 Go 开发一个计算器", "用 Java 写个 X", "用 Wails 做 X" - that is the
+whole incantation; no flags, no template names:
+
+| user says | what the skill does |
+|---|---|
+| 用 **Go** 开发 X | `new-go-project.sh`: logic in `go/main.go` (Go), Java is a ~90-line shell |
+| 用 **Java** 开发 X | `new-project.sh`: everything in Java (the default when nothing is said) |
+| 用 **Wails** 开发 X | Go project whose `go/` is a Wails v3 server: `GO_BIN_FLAGS='-tags server'` (`references/go-native.md`) |
+| "给现有 app 加个 Go 模块" | drop a `go/` dir into it - `build.sh` picks it up automatically |
+
+Cost of Go (measured, arm64 phone): apk 21 KB -> 832 KB, installed +7.6 MB, cold start +20 ms,
+one JNI call ~370 ns. Win: 50-100x on CPU-heavy and fan-out work (fib(28): 1.6 ms vs 131 ms;
+200k tasks: 150 ms vs 831 ms), goroutines, and the whole Go stdlib (net/http, database/sql,
+encoding/json) inside the apk. Full numbers, rules and gotchas: `references/go-native.md`.
 
 ## Verify what you built, not what you assume
 
@@ -95,6 +121,15 @@ screen-off behaviour and the troubleshooting table: `references/virtual-display.
    or `termux-open app.apk` and tap Install once.
 8. **Stage the apk in `/data/local/tmp`** before `pm install`: `system_server` opens the file
    and cannot read `/data/data/com.termux/...`.
+9. **Go business code: `go build -buildmode=c-shared` + JNI.** Termux's go is preconfigured
+   for `GOOS=android GOARCH=arm64 CGO_ENABLED=1`, so a cgo `.so` builds on the phone with no
+   NDK. Export JNI-named symbols (`//export Java_com_example_app_MainActivity_nativeAdd`);
+   cgo cannot call `JNIEnv`'s function table, so wrap JNI calls in `static` C helpers; every
+   export must `recover()` (a Go panic that reaches the JVM SIGABRTs the whole app); a
+   goroutine that outlives the call needs `NewGlobalRef` + `AttachCurrentThread` and must
+   delete its global ref before detaching; the manifest needs `android:extractNativeLibs="true"`
+   (no zipalign on device); arm64 only, and `gomobile` is not usable on device. See
+   `references/go-native.md`.
 
 `references/pitfalls.md` has the full list with the exact error text; read it when a step
 fails. `references/build.md` explains the toolchain, `references/install.md` the install and
@@ -127,6 +162,11 @@ vendor/vd/vd.jar      background-display daemon (prebuilt, 7 KB) + Vd.java
 build.sh install.sh test.sh probe.sh log.sh screen.sh vd.sh
 ```
 
+A Go project (`new-go-project.sh`) adds `go/` (module: `main.go` business logic + JNI bridge,
+`web.go` net/http + HTML for a WebView UI, `bin/` pure-Go exec'able binary) and the `GO_DIR` /
+`GO_LIB` / `GO_BIN` / `GO_LDFLAGS` keys in `app.env`; `build.sh` builds them into
+`lib/arm64-v8a/` automatically when `go/go.mod` exists.
+
 `app.env` is the single source of truth for api levels; an environment variable wins over it,
 e.g. `PLATFORM_API=34 ./build.sh` as soon as `vendor/android-34-android.jar` exists.
 
@@ -139,7 +179,11 @@ Only `pkg install` needs the network, and only on a fresh Termux. Only API 33 is
 
 ## Not covered here
 
-Kotlin (`kotlinc` in the Termux repo, then feed `.class` to d8), native code (Rust/NDK, ship a
-`.so` and set `extractNativeLibs`), and Gradle/AGP on device (works, but needs
+Kotlin (`kotlinc` in the Termux repo, then feed `.class` to d8), Rust/NDK (ship a `.so` and set
+`extractNativeLibs`), multi-ABI native libs (on-device Go is arm64 only), `gomobile` (needs an
+SDK + NDK layout the phone does not have), and Gradle/AGP on device (works, but needs
 `android.aapt2FromMavenOverride=$PREFIX/bin/aapt2` and `zipAlignEnabled = false`). For large
 multi-module projects, build in CI and `termux-open` the artifact.
+
+Go as the business layer **is** covered: `references/go-native.md`, Wails v3 server mode
+included; `mygo` is not (it needs go >= 1.27 and a desktop GUI backend).
