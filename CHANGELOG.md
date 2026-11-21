@@ -30,9 +30,10 @@ and `ndk-sysroot` supplies `jni.h`.
   device, `wails3 generate bindings` generates the JS bindings on device, and
   `go build -tags server` (`GO_BIN_FLAGS`) yields a 11.7 MB binary that serves the frontend and
   its bound Go services on 127.0.0.1. Java exec's it from `nativeLibraryDir`, reads the
-  `SERVER URL:` it prints, and shows it in a WebView - verified: JS → `App.Fib(28)` → 2 ms →
+  `SERVER URL:` it prints, and shows it in a WebView - verified: JS → `App.Fib(28)` → 1 ms →
   `window.Android` → Java, 17 ms from exec to listening. `mygo` needs go >= 1.27 and a desktop
-  GUI backend, so it cannot run here.
+  GUI backend, so it cannot run here. `new-go-project.sh --wails` scaffolds it (templates
+  `templates/go/wails/`), and the scaffolded `test.sh` asserts the JS → Go → Java round trip.
 
 # 0.2.0
 

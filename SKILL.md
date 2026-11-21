@@ -41,6 +41,20 @@ sh $S/new-go-project.sh $HOME/apps/goapp com.example.goapp "Go App" goapp
 cd $HOME/apps/goapp && GO_TEST=1 ./build.sh && ./install.sh && ./test.sh
 ```
 
+Business logic as **Wails v3 services** with an HTML/JS UI (Go server on 127.0.0.1, WebView as
+the screen, Java ~90 lines of plumbing; needs `pkg install nodejs-lts` + `go install
+.../cmd/wails3` once, network):
+
+```sh
+sh $S/new-go-project.sh --wails $HOME/apps/wails com.example.wails "Wails App" wails
+cd $HOME/apps/wails/go && GOFLAGS=-mod=mod go get github.com/wailsapp/wails/v3@latest \
+  && GOFLAGS=-mod=mod go mod tidy
+wails3 generate bindings -b -d frontend/dist/wailsjs .    # JS bindings, on device
+B=$(find frontend/dist/wailsjs -name index.js -not -path '*/events/*' | head -1 | sed 's|frontend/dist/||')
+sed -i "s|__BINDINGS__|./$B|" frontend/dist/index.html
+cd $HOME/apps/wails && ./build.sh && ./install.sh && ./test.sh
+```
+
 `new-project.sh` copies everything a project needs (scripts + lib/ + templates), so the
 project keeps working even if this skill is moved or deleted. Its `README.md` lists the
 files. `./build.sh` is bash - never call it as `sh build.sh`.
