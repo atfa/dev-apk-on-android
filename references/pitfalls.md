@@ -206,3 +206,32 @@ default display, so `vd.sh destroy` throws the app in front of the user (measure
 from `com.termux` to `com.android.settings/.Settings`, and the Bluetooth page appeared). Fix:
 create the display with `VIRTUAL_DISPLAY_FLAG_DESTROY_CONTENT_ON_REMOVAL`, which finishes the
 apps instead of relocating them - `vd.sh` sets it.
+
+## Packaging
+
+### 34. `FileNotFoundException: assets/...` at runtime, although the file is inside the apk
+
+The packaging step zipped the *contents* of `assets/` (`(cd assets && zip -r ../apk/unaligned.apk .)`),
+which stores `model.bin` at the archive root. `AssetManager.open("mdl/model.bin")` looks up the
+literal path `assets/mdl/model.bin`, so every lookup fails - and `unzip -l` looks fine at a glance.
+Fix: zip the directory itself from the project root, `zip -q -X -r out/apk/unaligned.apk assets`,
+and verify with `unzip -l out/apk/unaligned.apk | grep '^.*assets/'`.
+
+### 35. `UnsatisfiedLinkError: dlopen failed: library "libfoo.so" not found` for a prebuilt `.so`
+
+`build.sh` packaged only the library it built itself (from `out/native/`); a `.so` shipped in the
+project's `jniLibs/<abi>/` was never added to the apk, so `System.loadLibrary("foo")` failed even
+though the file sat in the project. Fix: stage `jniLibs/<abi>/*.so` into `out/apk/lib/<abi>/` and
+zip that directory - the archive path must be exactly `lib/<abi>/<name>.so` - then confirm with
+`unzip -l app.apk | grep 'lib/'`.
+
+## Hooks driven from adb
+
+### 36. ANR right after `am start --es hook ...`, app is killed with "user request after error"
+
+A hook that runs its work on the activity's main thread blocks the UI for the whole call - a
+request to a local LLM endpoint easily takes 10 s - and the system kills the app with
+`ANR in <pkg> ... Waited 5002ms for FocusEvent(hasFocus=true)` (see `dumpsys dropbox --print`).
+The hook itself still returns its result, so the driver sees the answer and the app dies
+afterwards. Fix: run hook work on a worker thread and return from `onCreate`/`onNewIntent`
+immediately; report progress through the app's own log file, which is what the driver polls.

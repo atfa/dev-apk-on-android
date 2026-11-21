@@ -107,8 +107,16 @@ if [ -d "$OUT/native" ] && ls "$OUT/native"/*.so >/dev/null 2>&1; then
   cp "$OUT/native"/*.so "$OUT/apk/lib/$ABI/"
   (cd "$OUT/apk" && zip -q -X -r "$OLDPWD/$OUT/apk/unaligned.apk" "lib/$ABI")
 fi
+# Prebuilt native libraries shipped with the project (jniLibs/<abi>/*.so), e.g. an OCR engine.
+if [ -d "jniLibs/$ABI" ] && [ -n "$(ls -A jniLibs/$ABI 2>/dev/null)" ]; then
+  mkdir -p "$OUT/apk/lib/$ABI"
+  cp "jniLibs/$ABI"/*.so "$OUT/apk/lib/$ABI/"
+  (cd "$OUT/apk" && zip -q -X -r "$OLDPWD/$OUT/apk/unaligned.apk" "lib/$ABI")
+fi
 if [ -d assets ] && [ -n "$(ls -A assets 2>/dev/null)" ]; then
-  (cd assets && zip -q -X -r "$OLDPWD/$OUT/apk/unaligned.apk" .)
+  # AssetManager needs the literal "assets/" prefix inside the apk, so zip the directory
+  # itself, not its contents.
+  zip -q -X -r "$OUT/apk/unaligned.apk" assets
 fi
 
 echo "==> sign (v1+v2+v3)"

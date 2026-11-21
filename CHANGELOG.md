@@ -1,3 +1,20 @@
+# 0.3.1
+
+## Packaging fixes (found while shipping a 9 MB asset model and prebuilt `.so` libraries)
+
+* `scripts/build.sh` - assets are zipped as `assets/...`, i.e. the directory itself, not its
+  contents. The old `(cd assets && zip -r ../apk/unaligned.apk .)` put files at the archive root,
+  so every `AssetManager.open("...")` threw `FileNotFoundException` at runtime while
+  `unzip -l` looked fine.
+* `scripts/build.sh` - prebuilt native libraries in `jniLibs/<abi>/*.so` are staged into
+  `out/apk/lib/<abi>/` and zipped. Only the library built by the script itself (`out/native/`)
+  used to be packaged, so a vendored `.so` (offline OCR engine) was silently absent from the apk
+  and `System.loadLibrary` failed.
+* `references/build.md` - the packaging section states both rules (the `assets/` prefix, staging
+  `lib/<abi>/`) and the `unzip -l` checks that prove them.
+* `references/pitfalls.md` - three new entries: #34 assets prefix, #35 prebuilt `.so` missing from
+  the apk, #36 ANR from a hook that does its work on the main thread.
+
 # 0.3.0
 
 ## Go as the business layer (cgo + JNI, built on the phone)

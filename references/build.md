@@ -70,7 +70,20 @@ upstream jar unchanged (see `vendor/MANIFEST.md`) - the bundled one has R8's rul
 ```sh
 cp out/apk/base.apk out/apk/unaligned.apk
 (cd out/dex && zip -q -X -j ../apk/unaligned.apk classes.dex)
-(cd assets && zip -q -X -r ../apk/unaligned.apk .)          # if assets/ is not empty
+zip -q -X -r out/apk/unaligned.apk assets        # if assets/ is not empty
+```
+
+Zip the `assets` *directory*, from the project root: `AssetManager` looks up the literal path
+`assets/foo.bin`, so `(cd assets && zip -r ../apk/unaligned.apk .)` stores `foo.bin` at the
+archive root and every lookup fails at runtime with `FileNotFoundException`.
+
+Native libraries need the archive path `lib/<abi>/<name>.so`, so stage them first (the Go build
+writes them to `out/native/`, prebuilt ones live in `jniLibs/<abi>/`):
+
+```sh
+mkdir -p out/apk/lib/arm64-v8a
+cp out/native/*.so jniLibs/arm64-v8a/*.so out/apk/lib/arm64-v8a/
+(cd out/apk && zip -q -X -r ../apk/unaligned.apk lib/arm64-v8a)
 ```
 
 There is no `zipalign` in Termux and none is needed for a pure Java/Kotlin apk. With native
